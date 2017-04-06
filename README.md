@@ -102,7 +102,7 @@ You have the option to train your network manually using a combination of infere
 
 The `backpropagate` method accepts the single set of output labels corresponding to the most recent call to `infer`. Internally, the network will compare the labels to its actual output, and apply stochastic gradient descent using the `learningRate` and `momentum` values provided earlier. Over many cycles, this will shift the network's weights closer to the "true" answer.
 
-The `backpropagate` method will also return the sum of the set's errors, as calculated by the absolute value of the difference between the expected and actual outputs. This allows you to track the network's progress over time and determine when to stop training.
+The `backpropagate` method will also return the sum of the set's errors, as calculated by the absolute value of the difference between the expected and actual outputs. This allows you to track the network's progress over time if desired, but can often be ignored for training sets.
 
 ```swift
 let err = try nn.backpropagate([myLabels])
