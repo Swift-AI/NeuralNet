@@ -100,9 +100,43 @@ Note: Training will continue until the average error drops below the provided th
 ### Manual Training
 You have the option to train your network manually using a combination of inference and backpropagation.
 
-The `backpropagate` method accepts the single set of output labels corresponding to the most recent call to `infer`. It returns the sum of the set's errors, as calculated by the absolute value of the difference between the expected and actual outputs. Note that `backpropagate` does not accept a cost function; it is up to you to interpret the error as you wish.
+The `backpropagate` method accepts the single set of output labels corresponding to the most recent call to `infer`. Internally, the network will compare the labels to its actual output, and apply stochastic gradient descent using the `learningRate` and `momentum` values provided earlier. Over many cycles, this will shift the network's weights closer to the "true" answer.
+
+The `backpropagate` method will also return the sum of the set's errors, as calculated by the absolute value of the difference between the expected and actual outputs. This allows you to track the network's progress over time and determine when to stop training.
 
 ```swift
 let err = try nn.backpropagate([myLabels])
 ```
+
+A full training routine might look something like this:
+
+```swift
+let trainInputs: [[Float]] = [[/* Training data here */]]
+let trainLabels: [[Float]] = [[/* Training labels here */]]
+let validationInputs: [[Float]] = [[/* Validation data here */]]
+let validationLabels: [[Float]] = [[/* Validation labels here */]]
+
+// Loop forever until desired network accuracy is met
+while true {
+    // Perform one training epoch on training data
+    for (inputs, labels) in zip(trainInputs, trainLabels) {
+        try nn.infer(inputs)
+        try nn.backpropagate(labels)
+    }
+    // After each epoch, check progress on validation data
+    var error: Float = 0
+    for (inputs, labels) in zip(validationInputs, validationLabels) {
+        let outputs = try nn.infer(inputs)
+        // Sum the error of each output node
+        error += zip(outputs, labels).reduce(0, {abs($0 - $1)})
+    }
+    // Calculate average error
+    // Note: an alternative might be to calculate MSE or other cost function
+    error /= Float(validationInputs.count)
+    if error < DESIRED_ERROR {
+        break
+    }
+}
+```
+
 
