@@ -30,7 +30,7 @@ public extension NeuralNet {
         /// The full set of labels for the validation set.
         public let validationLabels: [[Float]]
         
-        init(trainInputs: [[Float]], trainLabels: [[Float]],
+        public init(trainInputs: [[Float]], trainLabels: [[Float]],
              validationInputs: [[Float]], validationLabels: [[Float]],
             structure: NeuralNet.Structure) throws {
             // Ensure that an equal number of sets were provided for inputs and their corresponding answers

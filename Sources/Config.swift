@@ -26,7 +26,7 @@ public extension NeuralNet {
         /// The momentum factor to apply during training.
         let momentumFactor: Float
         
-        init(activation: ActivationFunction, learningRate: Float, momentum: Float) throws {
+        public init(activation: ActivationFunction, learningRate: Float, momentum: Float) throws {
             // Ensure valid parameters
             guard learningRate >= 0 && momentum >= 0 else {
                 throw Error.initialize("Learning rate and momentum must be positivie.")
