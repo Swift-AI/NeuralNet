@@ -98,6 +98,11 @@ try nn.train(dataset, cost: .crossEntropy, errorThreshold: 0.001)
 Note: Training will continue until the average error drops below the provided threshold. Be careful not to provide too low of a value, or training may take a very long time or get stuck in a local minimum.
 
 ### Manual Training
+You have the option to train your network manually using a combination of inference and backpropagation.
 
-(Full documentation coming soon)
+The `backpropagate` method accepts the single set of output labels corresponding to the most recent call to `infer`. It returns the sum of the set's errors, as calculated by the absolute value of the difference between the expected and actual outputs. Note that `backpropagate` does not accept a cost function; it is up to you to interpret the error as you wish.
+
+```swift
+let err = try nn.backpropagate([myLabels])
+```
 
