@@ -148,7 +148,10 @@ A few methods and properties are provided to access or modify the state of the n
  ```swift
  let weights = nn.allWeights()
  ```
- - `setWeights` - Allows the user to reset the network with custom weights at any time. Accepts a serialized array of `Float`, as returned by the `allWeights` method.
+ - `setWeights` - Allows the user to reset the network with custom weights at any time. Accepts a serialized array of `Float`, as returned by the `allWeights` method.\:
+ ```swift
+ try nn.setWeights(weights)
+ ```
  
  Additinally, `learningRate` and `momentum` are mutable properties on `NeuralNet` that may be safely tuned at any time.
  
