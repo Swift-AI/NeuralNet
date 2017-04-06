@@ -67,18 +67,37 @@ This is the primary usage for `NeuralNet`. Note that `input.count` must always e
 ## Training
 What good is a neural network that hasn't been trained? You have two options for training your net:
 
-### Automatically
+### Automatic Training
 Your net comes with a `train` method that attempts to perform all training steps automatically. This method is recommended for simple applications and newcomers, but might be too limited for advanced users.
 
-In order to train automatically you must first create a `Dataset`, which is a simple container for all training and validation data. It accepts 5 parameters:
+In order to train automatically you must first create a `Dataset`, which is a simple container for all training and validation data. The object accepts 5 parameters:
  - `trainInputs`: A 2D `Float` array containing all sets of training inputs. Each set must be equal in size to your network's `inputs`.
- - `trainLabels`: A 2D `Float` array containing all labels corresponding to each input set. Each set must be equal in size to your network's `outputs`, and there must be an equal number of sets as `trainInputs`.
+ - `trainLabels`: A 2D `Float` array containing all labels corresponding to each input set. Each set must be equal in size to your network's `outputs`, and the number of sets must match `trainInputs`.
  - `validationInputs`: Same as `trainInputs`, but a unique set of data used for network validation.
- - `validationLabels`: Same as `trainLabels`, but a unique validation set corressponding to `validationInputs`.
+ - `validationLabels`: Same as `trainLabels`, but a unique validation set corresponding to `validationInputs`.
+ - `structure`: This should be the same `Structure` object used to create your network. If you initialized the network from disk, or don't have access to the original `Structure`, you can access it as a property on your net: `nn.structure`. Providing this parameter allows `Dataset` to perform some preliminary checks on your data, to help avoid issues later during training.
  
-Note: The validation data will NOT be used to train the network, but will be used to test the network's progress periodically. Once the desired error threshold on the validation data has been reached, the training will stop. Ideally, the validation sets should be randomly selected and representative of the entire search space.
+Note: The validation data will NOT be used to train the network, but will be used to test the network's progress periodically. Once the desired error threshold on the validation data has been reached, the training will stop. Ideally, the validation data should be randomly selected and representative of the entire search space.
 
-### Manually
+```swift
+let dataset = try NeuralNet.Dataset(trainInputs: myTrainingData,
+                                    trainLabels: myTrainingLabels,
+                                    validationInputs: myValidationData,
+                                    validationLabels: myValidationLabels,
+                                    structure: structure)
+```
+
+One you have a dataset, you're ready to train the network. Two more parameters are required for training:
+ - `cost`: A `CostFunction` for calculating error. The function chosen depends heavily on the application, but `.meanSquared` and `.crossEntropy` are both common options. You may also provide a custom function if desired.
+ - `errorThreshold`: The minimum *average* error to achieve before training is allowed to stop. This error is calculated using your chosen cost function, and is averaged across each validation set. Error must be positive and nonzero.
+ 
+```swift
+try nn.train(dataset, cost: .crossEntropy, errorThreshold: 0.001)
+```
+
+Note: Training will continue until the average error drops below the provided threshold. Be careful not to provide too low of a value, or training may take a very long time or get stuck in a local minimum.
+
+### Manual Training
 
 (Full documentation coming soon)
 
