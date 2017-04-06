@@ -134,9 +134,27 @@ while true {
     // Note: an alternative might be to calculate MSE or other cost function
     error /= Float(validationInputs.count)
     if error < DESIRED_ERROR {
+        // SUCCESS
         break
     }
 }
 ```
 
+Since manual training gives you direct access to the network's outputs, you have the ability to calculate error however you wish. In this example we calculate an averaged sum; more advanced applications might use Mean Squared Error, Cross Entropy or more complex functions. In addition, you have the ability to tune the network's `learningRate` and `momentum` parameters during training to achieve fine-tuned results.
+
+## Reading and Modifying
+A few methods and properties are provided to access or modify the state of the neural network:
+ - `allWeights` - Returns a serialized array of the network's current weights at any point:
+ ```swift
+ let weights = nn.allWeights()
+ ```
+ - `setWeights` - Allows the user to reset the network with custom weights at any time. Accepts a serialized array of `Float`, as returned by the `allWeights` method.
+ 
+ Additinally, `learningRate` and `momentum` are mutable properties on `NeuralNet` that may be safely tuned at any time.
+ 
+ ## Additional Information
+ To achieve nonlinearity, `NeuralNet` uses a one of several activation functions for hidden and output nodes, as configured during initialization. Because of this property, you will achieve better results if the following points are taken into consideration:
+- Input data should generally be [normalized](https://visualstudiomagazine.com/articles/2014/01/01/how-to-standardize-data-for-neural-networks.aspx) to have a mean of `0` and standard deviation of `1`.
+- Except in the case of `.linear` activation, outputs will always reside in the range (0, 1). For regression problems, a wider range is often needed and thus the outputs must be scaled accordingly.
+- When providing labels for backpropagation, this data must be scaled in reverse so that all outputs also reside in the range (0, 1).  Again, this does not apply to networks using linear activation functions.
 
