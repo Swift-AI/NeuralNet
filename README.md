@@ -12,9 +12,36 @@ SPM makes it easy to import the package into your own project. Just add this lin
 ```
 
 ### Manually
-Since SPM doesn't support iOS or Cocoa applications yet, you may need to import the package manually. To do this, simply drag and drop the files from `Sources` into your project.
+Since iOS and Cocoa applications aren't supported by SPM yet, you may need to import the package manually. To do this, simply drag and drop the files from `Sources` into your project.
 
-This isn't as elegant as using a package manager, but we anticipate SPM support for iOS soon. For this reason we've decided not to use alternatives like CocoaPods.
+This isn't as elegant as using a package manager, but we anticipate SPM support for these platforms soon. For this reason we've decided not to use alternatives like CocoaPods.
 
 ## Usage
+
+### Initialization
+`NeuralNet` relies on 2 helper classes for setting up the neural network: `Structure` and `Configuration`. As their names imply, these classes define the overall structure of the network and some basic settings for inference and training:
+
+ - **Structure:** This one is fairly straightforward. You simply pass in the number of inputs, hidden nodes, and outputs for your neural network.
+ 
+```swift
+let structure = try NeuralNet.Structure(inputs: 784, hidden: 420, outputs: 10)
+```
+
+ - **Configuration:** These parameters are behavioral:
+     - `activation`: An activation function to use during inference. Several defaults are provided; you may also provide a custom function. Note that custom functions must be differentiable, and you must also provide the derivative function (accepting a `y` value). If this is all new to you, start with `.sigmoid`.
+     - `learningRate`: A learning rate to apply during backpropagation. If you're unsure what this means, `0.7` is probably a good number.
+     - `momentum`: Another constant applied during backpropagation. If you're not sure, try `0.4`.
+
+```swift
+let config = try NeuralNet.Configuration(activation: .sigmoid, learningRate: 0.7, momentum: 0.4)
+```
+
+Once you've perfomed these steps, you're ready to create your `NeuralNet`:
+
+```swift
+let nn = try NeuralNet(structure: structure, config: config)
+```
+
+
 (Full documentation coming soon)
+
