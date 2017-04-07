@@ -55,7 +55,7 @@ let nn = try NeuralNet(url: url)
 ```
 
 ## Inference
-You perform inference using the `infer` method, which accepts an array of `Float` as input:
+You perform inference using the `infer` method, which accepts an array `[Float]` as input:
 
 ```swift
 let input: [Float] = [1, 5.2, 46.7, 12.0] // ...
@@ -71,8 +71,8 @@ What good is a neural network that hasn't been trained? You have two options for
 Your net comes with a `train` method that attempts to perform all training steps automatically. This method is recommended for simple applications and newcomers, but might be too limited for advanced users.
 
 In order to train automatically you must first create a `Dataset`, which is a simple container for all training and validation data. The object accepts 5 parameters:
- - `trainInputs`: A 2D `Float` array containing all sets of training inputs. Each set must be equal in size to your network's `inputs`.
- - `trainLabels`: A 2D `Float` array containing all labels corresponding to each input set. Each set must be equal in size to your network's `outputs`, and the number of sets must match `trainInputs`.
+ - `trainInputs`: A 2D array `[[Float]]` containing all sets of training inputs. Each set must be equal in size to your network's `inputs`.
+ - `trainLabels`: A 2D array `[[Float]]` containing all labels corresponding to each input set. Each set must be equal in size to your network's `outputs`, and the number of sets must match `trainInputs`.
  - `validationInputs`: Same as `trainInputs`, but a unique set of data used for network validation.
  - `validationLabels`: Same as `trainLabels`, but a unique validation set corresponding to `validationInputs`.
  - `structure`: This should be the same `Structure` object used to create your network. If you initialized the network from disk, or don't have access to the original `Structure`, you can access it as a property on your net: `nn.structure`. Providing this parameter allows `Dataset` to perform some preliminary checks on your data, to help avoid issues later during training.
@@ -148,7 +148,7 @@ A few methods and properties are provided to access or modify the state of the n
  ```swift
  let weights = nn.allWeights()
  ```
- - `setWeights` - Allows the user to reset the network with custom weights at any time. Accepts a serialized array of `Float`, as returned by the `allWeights` method.\:
+ - `setWeights` - Allows the user to reset the network with custom weights at any time. Accepts a serialized array `[Float]`, as returned by the `allWeights` method:
  ```swift
  try nn.setWeights(weights)
  ```
