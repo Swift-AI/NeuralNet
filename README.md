@@ -128,7 +128,7 @@ while true {
     for (inputs, labels) in zip(validationInputs, validationLabels) {
         let outputs = try nn.infer(inputs)
         // Sum the error of each output node
-        error += zip(outputs, labels).reduce(0, {abs($0 - $1)})
+        error += zip(outputs, labels).reduce(0, {$0 + abs($1.0 - $1.1)})
     }
     // Calculate average error
     // Note: an alternative might be to calculate MSE or other cost function
