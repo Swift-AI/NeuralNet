@@ -8,7 +8,7 @@ The `NeuralNet` class contains a fully connected, 3-layer feed-forward artificia
 ### Swift Package Manager
 SPM makes it easy to import the package into your own project. Just add this line to `package.swift`:
 ```swift
-.Package(url: "https://github.com/Swift-AI/NeuralNet.git", majorVersion: 0, minor: 1)
+.Package(url: "https://github.com/Swift-AI/NeuralNet.git", majorVersion: 0, minor: 2)
 ```
 
 ### Manually
@@ -22,16 +22,19 @@ This isn't as elegant as using a package manager, but we anticipate SPM support 
  - **Structure:** This one is fairly straightforward. You simply pass in the number of inputs, hidden nodes, and outputs for your neural network.
  
 ```swift
-let structure = try NeuralNet.Structure(inputs: 784, hidden: 420, outputs: 10)
+let structure = try NeuralNet.Structure(inputs: 784, hidden: 280, outputs: 10)
 ```
 
  - **Configuration:** These parameters are behavioral:
-     - `activation`: An activation function to use during inference. Several defaults are provided; you may also provide a custom function. Note that custom functions must be differentiable, and you must also provide the derivative function (accepting a `y` value). If this is all new to you, start with `.sigmoid`.
+     - `hiddenActivation`: An `ActivationFunction` to apply to all hidden nodes during inference. Several defaults are provided; you may also provide a custom function. Note that you must also provide the derivative of any custom function (accepting `f(x)`).
+     - `outputActivation`: An `ActivationFunction` to apply to the network's output layer.
+     - `cost`: A `CostFunction` for measuring the network's error. This function will be used during backpropagation. You may also provide a custom function; this function must be differentiable with respect to the network's output. 
      - `learningRate`: A learning rate to apply during backpropagation.
-     - `momentum`: Another constant applied during backpropagation.
+     - `momentum`: A momentum factor to apply during backpropagation.
 
 ```swift
-let config = try NeuralNet.Configuration(activation: .sigmoid, learningRate: 0.5, momentum: 0.3)
+let config = try NeuralNet.Configuration(hiddenActivation: .rectifiedLinear, outputActivation: .sigmoid,
+                                         cost: .meanSquared, learningRate: 0.4, momentum: 0.2)
 ```
 
 Once you've perfomed these steps, you're ready to create your `NeuralNet`:
@@ -77,7 +80,7 @@ In order to train automatically you must first create a `Dataset`, which is a si
  - `validationLabels`: Same as `trainLabels`, but a unique validation set corresponding to `validationInputs`.
  - `structure`: This should be the same `Structure` object used to create your network. If you initialized the network from disk, or don't have access to the original `Structure`, you can access it as a property on your net: `nn.structure`. Providing this parameter allows `Dataset` to perform some preliminary checks on your data, to help avoid issues later during training.
  
-Note: The validation data will NOT be used to train the network, but will be used to test the network's progress periodically. Once the desired error threshold on the validation data has been reached, the training will stop. Ideally, the validation data should be randomly selected and representative of the entire search space.
+Note: The validation data will NOT be used to train the network, but will be used to test the network's progress periodically. Once the desired error threshold on the validation data has been reached, the training will cease. Ideally, the validation data should be randomly selected and representative of the full search space.
 
 ```swift
 let dataset = try NeuralNet.Dataset(trainInputs: myTrainingData,
@@ -87,22 +90,21 @@ let dataset = try NeuralNet.Dataset(trainInputs: myTrainingData,
                                     structure: structure)
 ```
 
-One you have a dataset, you're ready to train the network. Two more parameters are required for training:
- - `cost`: A `CostFunction` for calculating error. The function chosen depends heavily on the application, but `.meanSquared` and `.crossEntropy` are both common options. You may also provide a custom function if desired.
- - `errorThreshold`: The minimum *average* error to achieve before training is allowed to stop. This error is calculated using your chosen cost function, and is averaged across each validation set. Error must be positive and nonzero.
+One you have a dataset, you're ready to train the network. One more parameter is required to kick off the training process:
+ - `errorThreshold`: The minimum *average* error to achieve before training is allowed to stop. This error is calculated using your network's cost function, and is averaged across all validation sets. Error must be positive and nonzero.
  
 ```swift
-try nn.train(dataset, cost: .crossEntropy, errorThreshold: 0.001)
+try nn.train(dataset, errorThreshold: 0.001)
 ```
 
 Note: Training will continue until the average error drops below the provided threshold. Be careful not to provide too low of a value, or training may take a very long time or get stuck in a local minimum.
 
 ### Manual Training
-You have the option to train your network manually using a combination of inference and backpropagation.
+You have the option to train your network manually using a combination of inference and backpropagation. This method is ideal if you require fine-grained control over the training process.
 
 The `backpropagate` method accepts the single set of output labels corresponding to the most recent call to `infer`. Internally, the network will compare the labels to its actual output, and apply stochastic gradient descent using the `learningRate` and `momentum` values provided earlier. Over many cycles, this will shift the network's weights closer to the "true" answer.
 
-The `backpropagate` method will also return the sum of the set's errors, as calculated by the absolute value of the difference between the expected and actual outputs. This allows you to track the network's progress over time if desired, but can often be ignored for training sets.
+The `backpropagate` method does not return a value.
 
 ```swift
 let err = try nn.backpropagate([myLabels])
@@ -128,10 +130,9 @@ while true {
     for (inputs, labels) in zip(validationInputs, validationLabels) {
         let outputs = try nn.infer(inputs)
         // Sum the error of each output node
-        error += zip(outputs, labels).reduce(0, {$0 + abs($1.0 - $1.1)})
+        error += nn.costFunction.cost(real: outputs, target: labels)
     }
     // Calculate average error
-    // Note: an alternative might be to calculate MSE or other cost function
     error /= Float(validationInputs.count)
     if error < DESIRED_ERROR {
         // SUCCESS
@@ -140,7 +141,7 @@ while true {
 }
 ```
 
-Since manual training gives you direct access to the network's outputs, you have the ability to calculate error however you wish. In this example we calculate an averaged sum; more advanced applications might use Mean Squared Error, Cross Entropy or more complex functions. In addition, you have the ability to tune the network's `learningRate` and `momentum` parameters during training to achieve fine-tuned results.
+Note from this example that your network's cost function is a public property. This allows you to calculate error using the same function that's used for backpropagation, if desired. In addition, you have the ability to tune the network's `learningRate` and `momentum` parameters during training to achieve fine-tuned results.
 
 ## Reading and Modifying
 A few methods and properties are provided to access or modify the state of the neural network:
@@ -158,6 +159,6 @@ A few methods and properties are provided to access or modify the state of the n
  ## Additional Information
  To achieve nonlinearity, `NeuralNet` uses a one of several activation functions for hidden and output nodes, as configured during initialization. Because of this property, you will achieve better results if the following points are taken into consideration:
 - Input data should generally be [normalized](https://visualstudiomagazine.com/articles/2014/01/01/how-to-standardize-data-for-neural-networks.aspx) to have a mean of `0` and standard deviation of `1`.
-- Except in the case of `.linear` activation, outputs will always reside in the range (0, 1). For regression problems, a wider range is often needed and thus the outputs must be scaled accordingly.
-- When providing labels for backpropagation, this data must be scaled in reverse so that all outputs also reside in the range (0, 1).  Again, this does not apply to networks using linear activation functions.
+- For most activation functions, outputs will reside in the range (0, 1). For regression problems, a wider range is often needed and thus the outputs must be scaled accordingly.
+- When providing labels for backpropagation, you may also need to scale the data in reverse (for applicable activations).
 
