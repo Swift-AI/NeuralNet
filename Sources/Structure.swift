@@ -26,6 +26,7 @@ public extension NeuralNet {
         /// The number of output nodes in the neural network.
         public let outputs: Int
         
+        
         // MARK: Pre-computed properties for performance optimization
         
         /// The number of input nodes, INCLUDING the bias node.

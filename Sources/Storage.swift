@@ -19,7 +19,7 @@ public extension NeuralNet {
     // This will allow Swift AI components to be written/read across platforms without compatibility issues.
     // -------------------
     
-
+    
     // MARK: JSON keys
     
     static let inputsKey = "inputs"
@@ -27,7 +27,9 @@ public extension NeuralNet {
     static let outputsKey = "outputs"
     static let momentumKey = "momentum"
     static let learningKey = "learningRate"
-    static let activationKey = "activationFunction"
+    static let hiddenActivationKey = "hiddenActivation"
+    static let outputActivationKey = "outputActivation"
+    static let costKey = "costFunction"
     static let weightsKey = "weights"
     
     
@@ -47,32 +49,65 @@ public extension NeuralNet {
             let outputs = array[NeuralNet.outputsKey] as? Int,
             let momentum = array[NeuralNet.momentumKey] as? Float,
             let lr = array[NeuralNet.learningKey] as? Float,
-            let activationStr = array[NeuralNet.activationKey] as? String,
+            let hiddenActivationStr = array[NeuralNet.hiddenActivationKey] as? String,
+            let outputActivationStr = array[NeuralNet.outputActivationKey] as? String,
+            let costStr = array[NeuralNet.costKey] as? String,
             let weights = array[NeuralNet.weightsKey] as? [Float]
             else {
                 throw Error.initialization("One or more required NeuralNet properties are missing.")
         }
         
-        // Convert activation function to enum
-        var activation: ActivationFunction
+        // Convert hidden activation function to enum
+        var hiddenActivation: ActivationFunction
         // Check for custom activation function
-        if activationStr == "custom" {
+        if hiddenActivationStr == "custom" {
             // Note: Here we simply warn the user and set the activation to defualt (sigmoid)
             // The user should reset the activation to the original custom function manually
-            print("NeuralNet warning: custom activation function detected in stored network. Defaulting to sigmoid activation. It is your responsibility to reset the network's activation to the original function, or it is unlikely to perform correctly.")
-            activation = ActivationFunction.sigmoid
+            print("NeuralNet warning: custom hidden layer activation function detected in stored network. Defaulting to sigmoid (logistic) activation. It is your responsibility to reset the network's hidden layer activation to the original function, or it is unlikely to perform correctly.")
+            hiddenActivation = ActivationFunction.sigmoid
         } else {
-            guard let function = ActivationFunction.from(activationStr) else {
-                throw Error.initialization("Unrecognized activation function in file: \(activationStr)")
+            guard let function = ActivationFunction.from(hiddenActivationStr) else {
+                throw Error.initialization("Unrecognized hidden layer activation function in file: \(hiddenActivationStr)")
             }
-            activation = function
+            hiddenActivation = function
+        }
+        
+        // Convert output activation function to enum
+        var outputActivation: ActivationFunction
+        // Check for custom activation function
+        if outputActivationStr == "custom" {
+            // Note: Here we simply warn the user and set the activation to defualt (sigmoid)
+            // The user should reset the activation to the original custom function manually
+            print("NeuralNet warning: custom output activation function detected in stored network. Defaulting to sigmoid (logistic) activation. It is your responsibility to reset the network's output activation to the original function, or it is unlikely to perform correctly.")
+            outputActivation = ActivationFunction.sigmoid
+        } else {
+            guard let function = ActivationFunction.from(outputActivationStr) else {
+                throw Error.initialization("Unrecognized output activation function in file: \(outputActivationStr)")
+            }
+            outputActivation = function
+        }
+        
+        // Convert cost function to enum
+        var cost: CostFunction
+        // Check for custom cost function
+        if costStr == "custom" {
+            // Note: Here we simply warn the user and set the activation to defualt (sigmoid)
+            // The user should reset the activation to the original custom function manually
+            print("NeuralNet warning: custom cost function detected in stored network. Defaulting to meanSquared. It is your responsibility to reset the network's cost to the original function, or it is unlikely to perform correctly.")
+            cost = CostFunction.meanSquared
+        } else {
+            guard let function = CostFunction.from(costStr) else {
+                throw Error.initialization("Unrecognized cost function in file: \(costStr)")
+            }
+            cost = function
         }
         
         // Recreate Structure object
         let structure = try Structure(inputs: inputs, hidden: hidden, outputs: outputs)
         
         // Recreate Config object
-        let config = try Configuration(activation: activation, learningRate: lr, momentum: momentum)
+        let config = try Configuration(hiddenActivation: hiddenActivation, outputActivation: outputActivation,
+                                       cost: cost, learningRate: lr, momentum: momentum)
         
         // Initialize neural network
         try self.init(structure: structure, config: config, weights: weights)
@@ -88,7 +123,8 @@ public extension NeuralNet {
             NeuralNet.outputsKey : structure.outputs,
             NeuralNet.momentumKey : momentumFactor,
             NeuralNet.learningKey : learningRate,
-            NeuralNet.activationKey : activationFunction.stringValue(),
+            NeuralNet.hiddenActivationKey : hiddenActivation.stringValue(),
+            NeuralNet.outputActivationKey : outputActivation.stringValue(),
             NeuralNet.weightsKey : allWeights()
         ]
         

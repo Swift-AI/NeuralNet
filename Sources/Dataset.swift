@@ -31,8 +31,8 @@ public extension NeuralNet {
         public let validationLabels: [[Float]]
         
         public init(trainInputs: [[Float]], trainLabels: [[Float]],
-             validationInputs: [[Float]], validationLabels: [[Float]],
-            structure: NeuralNet.Structure) throws {
+                    validationInputs: [[Float]], validationLabels: [[Float]],
+                    structure: NeuralNet.Structure) throws {
             // Ensure that an equal number of sets were provided for inputs and their corresponding answers
             guard trainInputs.count == trainLabels.count && validationInputs.count == validationLabels.count else {
                 throw Error.data("The number of input sets provided for training/validation must equal the number of answer sets provided.")

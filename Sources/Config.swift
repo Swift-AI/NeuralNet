@@ -19,21 +19,28 @@ public extension NeuralNet {
             case initialize(String)
         }
         
-        /// The activation function to use for inference.
-        let activation: ActivationFunction
+        /// The activation function to apply to hidden nodes during inference.
+        let hiddenActivation: ActivationFunction
+        /// The activation function to apply to the output layer during inference.
+        let outputActivation: ActivationFunction
+        /// The cost function to use for backpropagation.
+        let cost: CostFunction
         /// The learning rate to apply during training.
         let learningRate: Float
         /// The momentum factor to apply during training.
         let momentumFactor: Float
         
-        public init(activation: ActivationFunction, learningRate: Float, momentum: Float) throws {
+        public init(hiddenActivation: ActivationFunction, outputActivation: ActivationFunction, cost: CostFunction,
+                    learningRate: Float, momentum: Float) throws {
             // Ensure valid parameters
             guard learningRate >= 0 && momentum >= 0 else {
-                throw Error.initialize("Learning rate and momentum must be positivie.")
+                throw Error.initialize("Learning rate and momentum must be positive.")
             }
             
             // Initialize properties
-            self.activation = activation
+            self.hiddenActivation = hiddenActivation
+            self.outputActivation = outputActivation
+            self.cost = cost
             self.learningRate = learningRate
             self.momentumFactor = momentum
         }

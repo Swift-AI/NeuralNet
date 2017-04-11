@@ -24,14 +24,19 @@ public final class NeuralNet {
     }
     
     // MARK: Public properties
-
+    
     /// The basic structure of the neural network (read-only).
     /// This includes the number of input, hidden and output nodes.
     public let structure: Structure
     
-    /// The activation function to apply during inference (read-only).
-    public var activationFunction: ActivationFunction
-
+    /// The activation function to apply to hidden nodes during inference.
+    public var hiddenActivation: ActivationFunction
+    /// The activation function to apply to the output layer during inference.
+    public var outputActivation: ActivationFunction
+    
+    /// The cost function to apply during backpropagation.
+    public var costFunction: CostFunction
+    
     /// The 'learning rate' parameter to apply during backpropagation.
     /// This property may be safely mutated at any time.
     public var learningRate: Float {
@@ -62,7 +67,9 @@ public final class NeuralNet {
     public init(structure: Structure, config: Configuration, weights: [Float]? = nil) throws {
         // Initialize basic properties
         self.structure = structure
-        self.activationFunction = config.activation
+        self.hiddenActivation = config.hiddenActivation
+        self.outputActivation = config.outputActivation
+        self.costFunction = config.cost
         self.learningRate = config.learningRate
         self.momentumFactor = config.momentumFactor
         
@@ -140,6 +147,9 @@ public extension NeuralNet {
     private func randomWeight(layerInputs: Int) -> Float {
         let range = 1 / sqrt(Float(layerInputs))
         let rangeInt = UInt32(2_000_000 * range)
+        
+        
+        
         let randomFloat = Float(arc4random_uniform(rangeInt)) - Float(rangeInt / 2)
         return randomFloat / 1_000_000
     }
@@ -178,18 +188,17 @@ public extension NeuralNet {
             cache.inputCache[i] = inputs[i - 1]
         }
         
-        // Calculate the weighted sums for the hidden layer
+        // Calculate the weighted sums for the hidden layer inputs
         vDSP_mmul(cache.hiddenWeights, 1,
                   cache.inputCache, 1,
                   &cache.hiddenOutputCache, 1,
-                  vDSP_Length(structure.hidden),
-                  vDSP_Length(1),
+                  vDSP_Length(structure.hidden), 1,
                   vDSP_Length(structure.numInputNodes))
         
         // Apply the activation function to the hidden layer nodes
         for i in (1...structure.hidden).reversed() {
             // Note: Array elements are shifted one index to the right, in order to efficiently insert the bias node at index 0
-            cache.hiddenOutputCache[i] = activationFunction.activation(cache.hiddenOutputCache[i - 1])
+            cache.hiddenOutputCache[i] = hiddenActivation.activation(cache.hiddenOutputCache[i - 1])
         }
         cache.hiddenOutputCache[0] = 1
         
@@ -197,13 +206,12 @@ public extension NeuralNet {
         vDSP_mmul(cache.outputWeights, 1,
                   cache.hiddenOutputCache, 1,
                   &cache.outputCache, 1,
-                  vDSP_Length(structure.outputs),
-                  vDSP_Length(1),
+                  vDSP_Length(structure.outputs), 1,
                   vDSP_Length(structure.numHiddenNodes))
         
         // Apply the activation function to the output layer nodes
         for i in 0..<structure.outputs {
-            cache.outputCache[i] = activationFunction.activation(cache.outputCache[i])
+            cache.outputCache[i] = outputActivation.activation(cache.outputCache[i])
         }
         
         // Return the final outputs
@@ -221,44 +229,90 @@ public extension NeuralNet {
     // keeping the code in-line allows the Swift compiler to make better optimizations.
     // Thus, we achieve improved performance at the cost of slightly less readable code.
     
+    // Note: Refer to Chapter 3 in the following paper to view the equations applied
+    // for this backpropagation algorithm (with modifications to allow for customizable activation/cost functions):
+    // https://www.cheshireeng.com/Neuralyst/doc/NUG14x.pdf
+    
+    
     /// Applies modifications to the neural network by comparing its most recent output to the given `labels`, adjusting the network's weights as needed.
     /// This method should be used for training a neural network manually.
     ///
-    /// - Parameter labels: The 'correct' desired output for the most recent inference cycle, as an array of `Float`.
-    /// - Returns: The total calculated error from the most recent inference.
+    /// - Parameter labels: The 'target' desired output for the most recent inference cycle, as an array `[Float]`.
     /// - Throws: An error if an incorrect number of outputs is provided.
     /// - IMPORTANT: The number of labels provided must exactly match the network's number of outputs (defined in its `Structure`).
-    @discardableResult
-    public func backpropagate(_ labels: [Float]) throws -> Float {
+    public func backpropagate(_ labels: [Float]) throws {
         // Ensure that the correct number of outputs was given
         guard labels.count == structure.outputs else {
             throw Error.train("Invalid number of labels provided: \(labels.count). Expected: \(structure.outputs).")
         }
         
-        // Calculate output errors
+        
+        // -----------------------------------------------------
+        //
+        // NOTE:
+        //
+        // In the following equations, it is assumed that the network has 3 layers.
+        // The subscripts [i], [j], [k] will be used to refer to input, hidden and output layers respectively.
+        // In networks with multiple hidden layers, [i] can be assumed to represent whichever layer preceeds the current layer (j),
+        // and [k] can be assumed to represent the succeeding layer.
+        //
+        // -----------------------------------------------------
+        
+        
+        // MARK: Output error gradients --------------------------------------
+        
+        // Note: Rather than calculating the cost gradient with respect to each output weight,
+        // we calculate the gradient with respect to each output node's INPUT, cache the result,
+        // and then calculate the gradient for each weight while simultaneously updating the weight.
+        // This results in lower memory consumption and fewer calculations.
+        
+        // Calculate the error gradient with respect to each output node's INPUT.
+        // e[k] = outputActivationDerivative(output) * costDerivative(output)
         for (index, output) in cache.outputCache.enumerated() {
-            cache.outputErrorsCache[index] = activationFunction.derivative(output) * (labels[index] - output)
+            cache.outputErrorGradientsCache[index] = outputActivation.derivative(output) *
+                costFunction.derivative(real: output, target: labels[index])
         }
         
-        // Calculate hidden errors
-        vDSP_mmul(cache.outputErrorsCache, 1,
+        
+        // MARK: Hidden error gradients --------------------------------------
+        
+        // Important: The cost function does not apply to hidden nodes.
+        // Instead, the cost derivative component is replaced with the sum of the nodes' error gradients in the succeeding layer
+        // (with respect to their inputs, as calculated above) multipled by the weight connecting this node to the following layer.
+        
+        // Below, w' represents the previous (and still current) weight connecting this node to the following layer.
+        // e[j] = hiddenActivationDerivative(hiddenOutput) * Σ(e[k] * w'[j][k])
+        
+        // Calculate the sums of the output error gradients multiplied by the output weights
+        vDSP_mmul(cache.outputErrorGradientsCache, 1,
                   cache.outputWeights, 1,
-                  &cache.hiddenErrorSumsCache, 1,
-                  vDSP_Length(1),
-                  vDSP_Length(structure.numHiddenNodes),
+                  &cache.outputErrorGradientSumsCache, 1,
+                  1, vDSP_Length(structure.numHiddenNodes),
                   vDSP_Length(structure.outputs))
         
-        for (index ,error) in cache.hiddenErrorSumsCache.enumerated() {
-            cache.hiddenErrorsCache[index] = activationFunction.derivative(cache.hiddenOutputCache[index]) * error
+        // Calculate the error gradient for each hidden node, with respect to the node's INPUT
+        for (index ,error) in cache.outputErrorGradientSumsCache.enumerated() {
+            cache.hiddenErrorGradientsCache[index] = hiddenActivation.derivative(cache.hiddenOutputCache[index]) * error
         }
         
+        
+        // MARK: Output weights ----------------------------------------------
+        
         // Update output weights
+        // Note: In this equation, w' represents the current (old) weight and w'' represents the PREVIOUS weight.
+        // In addition, M represents the momentum factor and LR represents the learning rate.
+        // X[j] represents the jth input to the node (or, the activated output from the jth hidden node)
+        //
+        // w[j][k] = w′[j][k] + (1 − M) ∗ LR ∗ e[k] ∗ X[j] + M ∗ (w′[j][k] − w′′[j][k])
         for index in 0..<structure.numOutputWeights {
-            let offset = cache.outputWeights[index] + (momentumFactor * (cache.outputWeights[index] - cache.previousOutputWeights[index]))
-            let errorIndex = cache.outputErrorIndices[index]
+            // Pre-computed indices: translates the current weight index into the corresponding output error/hidden output indices
+            let outputErrorIndex = cache.outputErrorIndices[index]
             let hiddenOutputIndex = cache.hiddenOutputIndices[index]
-            let mfLRErrIn = cache.mfLR * cache.outputErrorsCache[errorIndex] * cache.hiddenOutputCache[hiddenOutputIndex]
-            cache.newOutputWeights[index] = offset + mfLRErrIn
+            
+            // Note: mFLR is a pre-computed constant which equals (1 - M) * LR
+            cache.newOutputWeights[index] = cache.outputWeights[index] -
+                cache.mfLR * cache.outputErrorGradientsCache[outputErrorIndex] * cache.hiddenOutputCache[hiddenOutputIndex] +
+                momentumFactor * (cache.outputWeights[index] - cache.previousOutputWeights[index])
         }
         
         // Efficiently copy output weights from current to 'previous' array
@@ -273,14 +327,24 @@ public extension NeuralNet {
                   vDSP_Length(structure.numOutputWeights),
                   1, 1)
         
+        
+        // MARK: Hidden weights ----------------------------------------------
+        
+        // Note: This process is almost identical to the process for updating the output weights,
+        // since the error gradients have already been calculated independently for each layer.
+        
         // Update hidden weights
+        // w[i][j] = w′[i][j] + (1 − M) ∗ LR ∗ e[j] ∗ X[i] + M ∗ (w′[i][j] − w′′[i][j])
         for index in 0..<structure.numHiddenWeights {
-            let offset = cache.hiddenWeights[index] + (momentumFactor * (cache.hiddenWeights[index] - cache.previousHiddenWeights[index]))
-            let errorIndex = cache.hiddenErrorIndices[index]
+            // Pre-computed indices: translates the current weight index into the corresponding hidden error/input indices
+            let hiddenErrorIndex = cache.hiddenErrorIndices[index]
             let inputIndex = cache.inputIndices[index]
-            // Note: +1 on errorIndex to offset for bias 'error', which is ignored
-            let mfLRErrIn = cache.mfLR * cache.hiddenErrorsCache[errorIndex + 1] * cache.inputCache[inputIndex]
-            cache.newHiddenWeights[index] = offset + mfLRErrIn
+            
+            // Note: mfLR is a pre-computed constant which equals (1 - M) * LR
+            cache.newHiddenWeights[index] = cache.hiddenWeights[index] -
+                // Note: +1 on hiddenErrorIndex to offset for bias 'error', which is ignored
+                cache.mfLR * cache.hiddenErrorGradientsCache[hiddenErrorIndex + 1] * cache.inputCache[inputIndex] +
+                momentumFactor * (cache.hiddenWeights[index] - cache.previousHiddenWeights[index])
         }
         
         // Copy hidden weights from current to 'previous' array
@@ -294,9 +358,6 @@ public extension NeuralNet {
                   &cache.hiddenWeights, 1,
                   vDSP_Length(structure.numHiddenWeights),
                   1, 1)
-        
-        // Sum and return the output errors
-        return cache.outputErrorsCache.reduce(0, {$0 + abs($1)})
     }
     
     
@@ -304,12 +365,15 @@ public extension NeuralNet {
     ///
     /// - Parameters:
     ///   - data: A `Dataset` containing training and validation data, used to train the network.
-    ///   - cost: The cost function to use while calculating error, in order to determine network progress.
-    ///   - errorThreshold: The minimum acceptable error, as calculated by `cost`. This error will be calculated on the validation set at the end of each training epoch. Once the error has dropped below `errorThreshold`, training will cease and return. This value must be determined by the user, as it varies based on the type of data and desired accuracy.
+    ///   - errorThreshold: The minimum acceptable error, as calculated by the network's cost function.
+    /// This error will be averaged across the validation set at the end of each training epoch.
+    /// Once the error has dropped below `errorThreshold`, training will cease and return.
+    /// This value must be determined by the user, as it varies based on the type of data and desired accuracy.
     /// - Returns: A serialized array containing the network's final weights, as calculated during the training process.
     /// - Throws: An error if invalid data is provided. Checks are performed in advance to avoid problems during the training cycle.
     /// - WARNING: `errorThreshold` should be considered carefully. A value too high will produce a poorly-performing network, while a value too low (i.e. too accurate) may be unachievable, resulting in an infinite training process.
-    public func train(_ data: Dataset, cost: CostFunction, errorThreshold: Float) throws -> [Float] {
+    @discardableResult
+    public func train(_ data: Dataset, errorThreshold: Float) throws -> [Float] {
         // Ensure valid error threshold
         guard errorThreshold > 0 else {
             throw Error.train("Training error threshold must be greater than zero.")
@@ -332,7 +396,7 @@ public extension NeuralNet {
             var error: Float = 0
             for (index, inputs) in data.validationInputs.enumerated() {
                 let outputs = try infer(inputs)
-                error += cost.cost(real: outputs, expected: data.validationLabels[index])
+                error += costFunction.cost(real: outputs, target: data.validationLabels[index])
             }
             // Divide error by number of sets to find average error across full validation set
             error /= Float(data.validationInputs.count)

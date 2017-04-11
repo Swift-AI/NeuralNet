@@ -29,6 +29,8 @@ internal extension NeuralNet {
         /// Used frequently during backpropagation.
         var mfLR: Float
         
+        // Weights
+        
         /// The current weights leading into all of the hidden nodes, serialized in a single array.
         var hiddenWeights: [Float]
         /// The weights leading into all of the hidden nodes from the previous round of training, serialized in a single array.
@@ -39,6 +41,12 @@ internal extension NeuralNet {
         /// The weights leading into all of the output nodes from the previous round of training, serialized in a single array.
         /// Used for applying momentum during backpropagation.
         var previousOutputWeights: [Float]
+        /// Temporary storage while updating hidden weights, for use during backpropagation.
+        var newHiddenWeights: [Float]
+        /// Temporary storage while updating output weights, for use during backpropagation.
+        var newOutputWeights: [Float]
+        
+        // Outputs
         
         /// The most recent set of inputs applied to the network.
         var inputCache: [Float]
@@ -47,16 +55,19 @@ internal extension NeuralNet {
         /// The most recent output from the network.
         var outputCache: [Float]
         
-        /// Temporary storage while calculating hidden errors, for use during backpropagation.
-        var hiddenErrorSumsCache: [Float]
-        /// Temporary storage while calculating hidden errors, for use during backpropagation.
-        var hiddenErrorsCache: [Float]
-        /// Temporary storage while calculating output errors, for use during backpropagation.
-        var outputErrorsCache: [Float]
-        /// Temporary storage while updating hidden weights, for use during backpropagation.
-        var newHiddenWeights: [Float]
-        /// Temporary storage while updating output weights, for use during backpropagation.
-        var newOutputWeights: [Float]
+        // Errors
+        
+        /// The cost gradient for each hidden node, with respect to the node's INPUT.
+        /// Used as temporary storage during backpropagation.
+        var hiddenErrorGradientsCache: [Float]
+        /// The cost gradient for each output node, with respect to the node's INPUT.
+        /// Used as temporary storage during backpropagation.
+        var outputErrorGradientsCache: [Float]
+        /// The sums of the output error gradients multiplied by the output weights.
+        /// Used as temporary storage during backpropagation.
+        var outputErrorGradientSumsCache: [Float]
+        
+        // Indices - allow for fast array lookups during backpropagation
         
         /// The output error indices corresponding to each output weight.
         var outputErrorIndices = [Int]()
@@ -74,9 +85,9 @@ internal extension NeuralNet {
             self.hiddenOutputCache = [Float](repeatElement(0, count: structure.numHiddenNodes))
             self.outputCache = [Float](repeatElement(0, count: structure.outputs))
             
-            self.outputErrorsCache = [Float](repeatElement(0, count: structure.outputs))
-            self.hiddenErrorSumsCache = [Float](repeatElement(0, count: structure.numHiddenNodes))
-            self.hiddenErrorsCache = [Float](repeatElement(0, count: structure.numHiddenNodes))
+            self.outputErrorGradientsCache = [Float](repeatElement(0, count: structure.outputs))
+            self.outputErrorGradientSumsCache = [Float](repeatElement(0, count: structure.numHiddenNodes))
+            self.hiddenErrorGradientsCache = [Float](repeatElement(0, count: structure.numHiddenNodes))
             self.newOutputWeights = [Float](repeatElement(0, count: structure.numOutputWeights))
             self.newHiddenWeights = [Float](repeatElement(0, count: structure.numHiddenWeights))
             

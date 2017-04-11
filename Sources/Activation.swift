@@ -12,31 +12,41 @@ import Foundation
 public extension NeuralNet {
     
     public enum ActivationFunction {
-        /// Linear activation function (raw sum).
-        case linear
+        /// Identity activation function.
+        /// `f(x) = x`
+        /// `f'(x) = 1`
+        case identity
+        /// Rectified linear activation function (ReLU).
+        /// `f(x) = max(0, x)`
+        /// `f'(x) = f(x) == 0 ? 0 : 1`
+        case rectifiedLinear
         /// Sigmoid activation function.
+        /// `f(x) = 1 / (1 + exp(-x))`
+        /// `f'(x) = f(x) * (1 - f(x))`
         case sigmoid
-        /// Rational sigmoid activation function.
-        case rationalSigmoid
         /// Hyperbolic tangent activation function.
+        /// `f(x) = tanh(x)`
+        /// `f'(x) = 1 - (f(x) * f(x))`
         case hyperbolicTangent
         /// Custom activation function.
+        /// An activation function and derivative function must be provided.
+        /// The derivative must accept the value `f(x)`.
         case custom(activation: (_ x: Float) -> Float, derivative: (_ y: Float) -> Float)
-    
+        
         
         // MARK: Initialization
         
-        /// Attempts to create an ActivationFunction from a String.
+        /// Attempts to create an `ActivationFunction` from a `String`.
         /// This is used to effectively give each function a raw string,
         /// while bypassing the restriction that Swift enums with associated values cannot have raw values.
         static func from(_ string: String) -> ActivationFunction? {
             switch string {
-            case "linear":
-                return ActivationFunction.linear
+            case "identity":
+                return ActivationFunction.identity
+            case "ReLU":
+                return ActivationFunction.rectifiedLinear
             case "sigmoid":
                 return ActivationFunction.sigmoid
-            case "rationalSigmoid":
-                return ActivationFunction.rationalSigmoid
             case "hyperbolicTangent":
                 return ActivationFunction.hyperbolicTangent
             default:
@@ -44,17 +54,17 @@ public extension NeuralNet {
             }
         }
         
-        /// Returns the raw string value of the ActivationFunction.
+        /// Returns the raw string value of the `ActivationFunction`.
         /// This is used to effectively give each function a raw string,
         /// while bypassing the restriction that Swift enums with associated values cannot have raw values.
         func stringValue() -> String {
             switch self {
-            case .linear:
-                return "linear"
+            case .identity:
+                return "identity"
+            case .rectifiedLinear:
+                return "ReLU"
             case .sigmoid:
                 return "sigmoid"
-            case .rationalSigmoid:
-                return "rationalSigmoid"
             case .hyperbolicTangent:
                 return "hyperbolicTangent"
             case .custom(_, _):
@@ -69,14 +79,14 @@ public extension NeuralNet {
         ///
         /// - Parameter x: The x value at any point along the function.
         /// - Returns: The y value at this point.
-        func activation(_ x: Float) -> Float {
+        public func activation(_ x: Float) -> Float {
             switch self {
-            case .linear:
+            case .identity:
                 return x
+            case .rectifiedLinear:
+                return max(0, x)
             case .sigmoid:
                 return 1 / (1 + exp(-x))
-            case .rationalSigmoid:
-                return x / (1 + sqrt(1 + x * x))
             case .hyperbolicTangent:
                 return tanh(x)
             case .custom(let activation, _):
@@ -91,15 +101,14 @@ public extension NeuralNet {
         ///
         /// - Parameter y: The y value at any point along the function.
         /// - Returns: The function's derivative at this point.
-        func derivative(_ y: Float) -> Float {
+        public func derivative(_ y: Float) -> Float {
             switch self {
-            case .linear:
+            case .identity:
                 return 1
+            case .rectifiedLinear:
+                return y == 0 ? 0 : 1
             case .sigmoid:
                 return y * (1 - y)
-            case .rationalSigmoid:
-                let x = -(2 * y) / (y * y - 1)
-                return 1 / ((x * x) + sqrt((x * x) + 1) + 1)
             case .hyperbolicTangent:
                 return 1 - (y * y)
             case .custom(_, let derivative):
@@ -108,5 +117,5 @@ public extension NeuralNet {
         }
         
     }
-
+    
 }
