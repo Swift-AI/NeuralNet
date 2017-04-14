@@ -125,7 +125,8 @@ public extension NeuralNet {
             NeuralNet.learningKey : learningRate,
             NeuralNet.hiddenActivationKey : hiddenActivation.stringValue(),
             NeuralNet.outputActivationKey : outputActivation.stringValue(),
-            NeuralNet.weightsKey : allWeights()
+            NeuralNet.weightsKey : allWeights(),
+            NeuralNet.costKey : costFunction.stringValue()
         ]
         
         // Serialize array into JSON data
