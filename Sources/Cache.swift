@@ -16,98 +16,122 @@ internal extension NeuralNet {
      
      NOTE: The following cache is allocated once during NeuralNet initializtion, in order to prevent frequent
      heap allocations for temporary variables during the inference and backpropagation cycles.
-     Some known properties are computed in advance in order to to avoid type casting, integer division
-     and modulus operations inside loops.
      
      -------------------------------------------
      */
     
-    /// A set of pre-computed values and caches used internally by `NeuralNet`.
+    /// A set of caches used internally by `NeuralNet`.
     struct Cache {
-        
-        /// (1 - momentumFactor) * learningRate.
-        /// Used frequently during backpropagation.
-        var mfLR: Float
         
         // Weights
         
-        /// The current weights leading into all of the hidden nodes, serialized in a single array.
-        var hiddenWeights: [Float]
-        /// The weights leading into all of the hidden nodes from the previous round of training, serialized in a single array.
-        /// Used for applying momentum during backpropagation.
-        var previousHiddenWeights: [Float]
-        /// The current weights leading into all of the output nodes, serialized in a single array.
-        var outputWeights: [Float]
-        /// The weights leading into all of the output nodes from the previous round of training, serialized in a single array.
-        /// Used for applying momentum during backpropagation.
-        var previousOutputWeights: [Float]
-        /// Temporary storage while updating hidden weights, for use during backpropagation.
-        var newHiddenWeights: [Float]
-        /// Temporary storage while updating output weights, for use during backpropagation.
-        var newOutputWeights: [Float]
+        /// The total number of weights for each layer in the network.
+        /// The count for each layer corresponds to the number of weights connecting the previous layer to the current layer.
+        public let layerWeightCounts: [Int]
+        
+        /// All weights leading into each layer, serialized into single arrays.
+        var layerWeights: [[Float]]
+        
+        /// All weights leading into each layer, from the *previous* round of backpropagation.
+        /// This is used for applying momentum during backpropagation.
+        var previousLayerWeights: [[Float]]
+        
+        /// A cache used for calculating new weights during backpropagation.
+        var newLayerWeights: [[Float]]
+        
+        /// A cache used for calculating weight deltas during backpropgation.
+        var layerWeightMomentumDeltas: [[Float]]
+        
+        // Biases
+        
+        /// The biases applied to each node in each layer.
+        /// Note: Here, we treat biases as simple additions to the *current* layer,
+        /// rather than extra nodes (and weights) in the *previous* layer.
+        /// Thus, the input layer does not have biases but the output layer does.
+        var layerBiases: [[Float]]
+        
+        /// All biases from the *previous* round of backpropgation.
+        /// This is used for applying momentum during packpropagation.
+        var previousLayerBiases: [[Float]]
+        
+        /// A cache used for calculating new biases during backpropagation.
+        var newLayerBiases: [[Float]]
+        
+        /// A cache used for calculating bias deltas during backpropagation.
+        var layerBiasMomentumDeltas: [[Float]]
         
         // Outputs
         
-        /// The most recent set of inputs applied to the network.
-        var inputCache: [Float]
-        /// The most recent outputs from each of the hidden nodes.
-        var hiddenOutputCache: [Float]
-        /// The most recent output from the network.
-        var outputCache: [Float]
+        /// The cached output from each layer in the network, from the most recent inference.
+        var layerOutputs: [[Float]]
+        
+        /// The derivatives of the activation functions from each layer.
+        /// Used during backpropagation for calculating error gradients.
+        var layerOutputDerivatives: [[Float]]
         
         // Errors
         
-        /// The cost gradient for each hidden node, with respect to the node's INPUT.
-        /// Used as temporary storage during backpropagation.
-        var hiddenErrorGradientsCache: [Float]
-        /// The cost gradient for each output node, with respect to the node's INPUT.
-        /// Used as temporary storage during backpropagation.
-        var outputErrorGradientsCache: [Float]
-        /// The sums of the output error gradients multiplied by the output weights.
-        /// Used as temporary storage during backpropagation.
-        var outputErrorGradientSumsCache: [Float]
+        /// The error gradient for each node in every layer, for every batch set, with respect to the node's input.
+        /// Note: the outer array corresponds to the layers in the network, while the inner array holds a
+        /// serialized array of the errors for each node, for every batch set.
+        var layerErrors: [[Float]]
         
-        // Indices - allow for fast array lookups during backpropagation
         
-        /// The output error indices corresponding to each output weight.
-        var outputErrorIndices = [Int]()
-        /// The hidden output indices corresponding to each output weight.
-        var hiddenOutputIndices = [Int]()
-        /// The hidden error indices corresponding to each hidden weight.
-        var hiddenErrorIndices = [Int]()
-        /// The input indices corresponding to each hidden weight.
-        var inputIndices = [Int]()
-        
-        init(structure: NeuralNet.Structure, config: NeuralNet.Configuration) {
-            self.mfLR = (1 - config.momentumFactor)
-            
-            self.inputCache = [Float](repeatElement(0, count: structure.numInputNodes))
-            self.hiddenOutputCache = [Float](repeatElement(0, count: structure.numHiddenNodes))
-            self.outputCache = [Float](repeatElement(0, count: structure.outputs))
-            
-            self.outputErrorGradientsCache = [Float](repeatElement(0, count: structure.outputs))
-            self.outputErrorGradientSumsCache = [Float](repeatElement(0, count: structure.numHiddenNodes))
-            self.hiddenErrorGradientsCache = [Float](repeatElement(0, count: structure.numHiddenNodes))
-            self.newOutputWeights = [Float](repeatElement(0, count: structure.numOutputWeights))
-            self.newHiddenWeights = [Float](repeatElement(0, count: structure.numHiddenWeights))
-            
-            for i in 0..<structure.numOutputWeights {
-                self.outputErrorIndices.append(i / structure.numHiddenNodes)
-                self.hiddenOutputIndices.append(i % structure.numHiddenNodes)
+        init(structure: NeuralNet.Structure) {
+            // Layer outputs cache
+            self.layerOutputs = []
+            self.layerOutputDerivatives = []
+            for layer in 0..<structure.numLayers {
+                let matrix = [Float](repeatElement(0, count: structure.batchSize * structure.layerNodeCounts[layer]))
+                self.layerOutputs.append(matrix)
+                self.layerOutputDerivatives.append(matrix)
             }
             
-            for i in 0..<structure.numHiddenWeights {
-                self.hiddenErrorIndices.append(i / structure.numInputNodes)
-                self.inputIndices.append(i % structure.numInputNodes)
+            // Weights cache
+            self.layerWeights = [[]] // Empty set for first layer
+            self.previousLayerWeights = [[]]
+            self.newLayerWeights = [[]]
+            self.layerWeightMomentumDeltas = [[]]
+            for layer in 1..<structure.numLayers {
+                let matrix = [Float](repeatElement(0, count: structure.layerNodeCounts[layer - 1] * structure.layerNodeCounts[layer]))
+                self.layerWeights.append(matrix)
+                self.previousLayerWeights.append(matrix)
+                self.newLayerWeights.append(matrix)
+                self.layerWeightMomentumDeltas.append(matrix)
             }
             
-            self.hiddenWeights = [Float](repeatElement(0, count: structure.numHiddenWeights))
-            self.previousHiddenWeights = self.hiddenWeights
-            self.outputWeights = [Float](repeatElement(0, count: structure.outputs * structure.numHiddenNodes))
-            self.previousOutputWeights = self.outputWeights
+            // Weight counts for for each layer
+            var weightCounts = [Int]()
+            for (index, layer) in structure.layerNodeCounts.enumerated() {
+                if index == 0 {
+                    // Input layer has no weights
+                    weightCounts.append(0)
+                } else {
+                    weightCounts.append(structure.layerNodeCounts[index - 1] * layer)
+                }
+            }
+            self.layerWeightCounts = weightCounts
+            
+            // Biases
+            self.layerBiases = [[]] // Empty set for first layer
+            self.previousLayerBiases = [[]]
+            self.newLayerBiases = [[]]
+            self.layerBiasMomentumDeltas = [[]]
+            for layer in 1..<structure.numLayers {
+                let row = [Float](repeatElement(0, count: structure.layerNodeCounts[layer]))
+                self.layerBiases.append(row)
+                self.previousLayerBiases.append(row)
+                self.newLayerBiases.append(row)
+                self.layerBiasMomentumDeltas.append(row)
+            }
+            
+            // Errors cache
+            self.layerErrors = []
+            for layer in 0..<structure.numLayers {
+                self.layerErrors.append([Float](repeatElement(0, count: structure.layerNodeCounts[layer] * structure.batchSize)))
+            }
         }
         
     }
     
 }
-

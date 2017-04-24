@@ -9,7 +9,7 @@
 
 public extension NeuralNet {
     
-    /// A container for the basic structure of a 3-layer neural network.
+    /// A container for the basic structure of a `NeuralNet`.
     public struct Structure {
         
         /// Possible `Structure` errors.
@@ -19,44 +19,56 @@ public extension NeuralNet {
         
         // MARK: Basic structure properties
         
-        /// The number of input nodes in the neural network.
-        public let inputs: Int
-        /// The number of hidden nodes in the neural network.
-        public let hidden: Int
-        /// The number of output nodes in the neural network.
-        public let outputs: Int
+        /// The total number of layers in the neural network.
+        public let numLayers: Int
         
+        /// The number of nodes in each layer of the neural network.
+        public let layerNodeCounts: [Int]
         
-        // MARK: Pre-computed properties for performance optimization
+        /// The activation function to apply to hidden nodes during inference.
+        public let hiddenActivation: ActivationFunction.Hidden
         
-        /// The number of input nodes, INCLUDING the bias node.
-        let numInputNodes: Int
-        /// The number of hidden nodes, INCLUDING the bias node.
-        let numHiddenNodes: Int
-        /// The total number of weights connecting all input nodes to all hidden nodes.
-        let numHiddenWeights: Int
-        /// The total number of weights connecting all hidden nodes to all output nodes.
-        let numOutputWeights: Int
+        /// The activation function to apply to the output layer during inference.
+        public let outputActivation: ActivationFunction.Output
+        
+        /// The number of training examples in each batch.
+        let batchSize: Int
+        
+        /// The learning rate to apply during training.
+        let learningRate: Float
+        
+        /// The momentum factor to apply during training.
+        let momentumFactor: Float
         
         
         // MARK: Initialization
         
-        public init(inputs: Int, hidden: Int, outputs: Int) throws {
+        public init(nodes: [Int], hiddenActivation: ActivationFunction.Hidden, outputActivation: ActivationFunction.Output,
+                    batchSize: Int = 1, learningRate: Float = 0.5, momentum: Float = 0.9) throws {
             // Check for valid parameters
-            guard inputs > 0, hidden > 0, outputs > 0 else {
-                throw Error.initialize("Number of input, hidden and output nodes must be positive and nonzero.")
+            guard nodes.count >= 2 else {
+                throw Error.initialize("The network must contain a minimum of two layers (input + output).")
+            }
+            guard !nodes.contains(where: {$0 < 1}) else {
+                throw Error.initialize("Each network layer must contain one or more nodes.")
             }
             
-            // Initialize properties
-            self.inputs = inputs
-            self.hidden = hidden
-            self.outputs = outputs
+            // Store number of nodes for each layer
+            self.layerNodeCounts = nodes
             
-            // Compute other properties
-            self.numInputNodes = inputs + 1
-            self.numHiddenNodes = hidden + 1
-            self.numHiddenWeights = (hidden * (inputs + 1))
-            self.numOutputWeights = (outputs * (hidden + 1))
+            // Store total number of layers in the network
+            self.numLayers = nodes.count
+            
+            // Activation functions
+            self.hiddenActivation = hiddenActivation
+            self.outputActivation = outputActivation
+            
+            // Batch size
+            self.batchSize = batchSize
+            
+            // Training parameters
+            self.learningRate = learningRate
+            self.momentumFactor = momentum
         }
         
     }
