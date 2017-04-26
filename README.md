@@ -1,4 +1,4 @@
-![Banner](https://github.com/Swift-AI/Swift-AI/blob/master/SiteAssets/logo/banner.png)
+![Banner](https://github.com/Swift-AI/Swift-AI/blob/master/SiteAssets/banner.png)
 
 # NeuralNet
 This is the NeuralNet module for the Swift AI project. Full details on the project can be found in the [main repo](https://github.com/Swift-AI/Swift-AI).
