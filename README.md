@@ -3,14 +3,14 @@
 # NeuralNet
 This is the NeuralNet module for the Swift AI project. Full details on the project can be found in the [main repo](https://github.com/Swift-AI/Swift-AI).
 
-The `NeuralNet` class contains a fully connected, 3-layer feed-forward artificial neural network. This neural net uses a standard backpropagation training algorithm, and is designed for flexibility and use in performance-critical applications.
+The `NeuralNet` class contains a fully connected, feed-forward artificial neural network. This neural net offers support for deep learning, and is designed for flexibility and use in performance-critical applications.
 
 ## Importing
 
 ### Swift Package Manager
-SPM makes it easy to import the package into your own project. Just add this line to `package.swift`:
+SPM makes it easy to import the package into your own project. Just add this line to the dependencies in `package.swift`:
 ```swift
-.Package(url: "https://github.com/Swift-AI/NeuralNet.git", majorVersion: 0, minor: 2)
+.Package(url: "https://github.com/Swift-AI/NeuralNet.git", majorVersion: 0, minor: 3)
 ```
 
 ### Manually
@@ -19,30 +19,26 @@ Since iOS and Cocoa applications aren't supported by SPM yet, you may need to im
 This isn't as elegant as using a package manager, but we anticipate SPM support for these platforms soon. For this reason we've decided not to use alternatives like CocoaPods.
 
 ## Initialization
-`NeuralNet` relies on 2 helper classes for setting up the neural network: `Structure` and `Configuration`. As their names imply, these classes define the overall structure of the network and some basic settings for inference and training:
-
- - **Structure:** This one is fairly straightforward. You simply pass in the number of inputs, hidden nodes, and outputs for your neural network.
+`NeuralNet` relies on a helper class called `Structure` for setting up the neural network. As its name implies, this class defines the overall structure of the network. Its initializer accepts six arguments:
+ - `nodes`: An array `[Int]` designating the number of nodes (neurons) in each layer of the neural network. The first entry in the array corresponds to the number of inputs in the network; the lasy entry is the number of outputs. All other entries are hidden layers.
+ - `hiddenActivation`: An `ActivationFunction` to apply to all hidden layers during inference. Several defaults are provided; you may also provide a custom function if desired.
+ - `outputActivation`: An `ActivationFunction` to apply to the network's output layer.
+ - `batchSize`: The number of input sets in each batch that will be fed into the neural network. Default 1.
+ - `learningRate`: A learning rate to apply during backpropagation. Default 0.5.
+ - `momentum`: A momentum factor to apply during backpropagation. Default 0.9.
  
-```swift
-let structure = try NeuralNet.Structure(inputs: 784, hidden: 280, outputs: 10)
-```
+ Note: If you intend to use the network for inference only (no training), you may omit `learningRate` and `momentum`. Default values will be used, but they will not affect the network's output.
+ 
+ ```swift
+ let structure = try NeuralNet.Structure(nodes: [784, 500, 10],
+                                         hiddenActivation: .rectifiedLinear, outputActivation: .softmax,
+                                         batchSize: 100, learningRate: 0.8, momentum: 0.9)
+ ```
 
- - **Configuration:** These parameters are behavioral:
-     - `hiddenActivation`: An `ActivationFunction` to apply to all hidden nodes during inference. Several defaults are provided; you may also provide a custom function. Note that you must also provide the derivative of any custom function (accepting `f(x)`).
-     - `outputActivation`: An `ActivationFunction` to apply to the network's output layer.
-     - `cost`: A `CostFunction` for measuring the network's error. This function will be used during backpropagation. You may also provide a custom function; this function must be differentiable with respect to the network's output. 
-     - `learningRate`: A learning rate to apply during backpropagation.
-     - `momentum`: A momentum factor to apply during backpropagation.
-
-```swift
-let config = try NeuralNet.Configuration(hiddenActivation: .rectifiedLinear, outputActivation: .sigmoid,
-                                         cost: .meanSquared, learningRate: 0.4, momentum: 0.2)
-```
-
-Once you've perfomed these steps, you're ready to create your `NeuralNet`:
+Once you've definted the structure, you're ready to create your `NeuralNet`:
 
 ```swift
-let nn = try NeuralNet(structure: structure, config: config)
+let nn = try NeuralNet(structure: structure)
 ```
 
 #### From Storage
@@ -60,14 +56,30 @@ let nn = try NeuralNet(url: url)
 ```
 
 ## Inference
-You perform inference using the `infer` method, which accepts an array `[Float]` as input:
+You perform inference using the `infer` method, which accepts either an array `[Float]` or 2D array `[[Float]]`. The method chosen depends on the structure of your data:
+
+### Single Set
+
+If you set `batchSize` to 1 during initialization, you will most likely want to feed inputs using a 1-dimensional array `[Float]`. The size of the array must equal the number of inputs to the neural network.
 
 ```swift
-let input: [Float] = [1, 5.2, 46.7, 12.0] // ...
+let input: [Float] = [1, 2, 3, 4] // ...
 let output = try nn.infer(input)
 ```
 
-This is the primary usage for `NeuralNet`. Note that `input.count` must always equal the number of inputs defined in your network's `Structure`, or an error will be thrown.
+### Minibatch
+
+For convenience, the `infer` method may also accept a 2D array `[[Float]]` for minibatch inference. Each inner array `[Float]` is a single set of inputs for the neural network, and the outer array is a full batch. The size of the outer array much equal the `batchSize` defined during initialization.
+
+```swift
+let inputBatch: [[Float]] = [
+    [1, 2, 3, 4],
+    [4, 3, 2, 1]
+]
+let outputs = try nn.infer(inputBatch)
+```
+
+Note: Either method may always be used, regardless of `batchSize`, as long as the data is structured appropriately. For example, if `batchSize` is > 1 you may still feed inputs as a 1-dimensional array `[Float]` by serializing all inputs into a single array. Likewise, if `batchSize` is 1 you may still organize your inputs into a 2D array `[[Float]]` with only a single inner array. The result is the same; it is simply a matter of convenience.
 
 ## Training
 What good is a neural network that hasn't been trained? You have two options for training your net:
