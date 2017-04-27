@@ -35,7 +35,7 @@ This isn't as elegant as using a package manager, but we anticipate SPM support 
                                          batchSize: 100, learningRate: 0.8, momentum: 0.9)
  ```
 
-Once you've definted the structure, you're ready to create your `NeuralNet`:
+Once you've defined the structure, you're ready to create your `NeuralNet`:
 
 ```swift
 let nn = try NeuralNet(structure: structure)
@@ -69,7 +69,7 @@ let output = try nn.infer(input)
 
 ### Minibatch
 
-For convenience, the `infer` method may also accept a 2D array `[[Float]]` for minibatch inference. Each inner array `[Float]` is a single set of inputs for the neural network, and the outer array is a full batch. The size of the outer array much equal the `batchSize` defined during initialization.
+For convenience, the `infer` method may also accept a 2D array `[[Float]]` for minibatch inference. Each inner array `[Float]` is a single set of inputs for the neural network, and the outer array is a full batch. The size of the outer array must equal the `batchSize` defined during initialization.
 
 ```swift
 let inputBatch: [[Float]] = [
