@@ -302,7 +302,8 @@ public extension NeuralNet {
                     // TODO
                     break
                 case .sigmoid:
-                    result = zip(real, target).map{(-$0 * (1 - $0) * ($1 - $0))}
+                    let pairs = zip(real, target)
+                    result = pairs.map{(-$0 * (1 - $0) * ($1 - $0))}
                 case .softmax:
                     vDSP_vsub(target, 1,
                               real, 1,
