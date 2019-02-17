@@ -95,7 +95,25 @@ public final class NeuralNet {
             randomizeWeights()
         }
     }
-    
+
+    /// Creates a new neural net by copying another neural net and modifying the batch size
+    /// This is useful if you use a large batch size to train the model but then want to infer with a smaller batch size (for instance 1)
+    public init(neuralNet: NeuralNet, structure: Structure, batchSize: Int) throws {
+        self.numLayers = neuralNet.numLayers
+        self.layerNodeCounts = neuralNet.layerNodeCounts
+        self.batchSize = batchSize
+        self.hiddenActivation = neuralNet.hiddenActivation
+        self.outputActivation = neuralNet.outputActivation
+        self.learningRate = neuralNet.learningRate
+        self.momentumFactor = neuralNet.momentumFactor
+        self.adjustedLearningRate = neuralNet.adjustedLearningRate
+
+        // Initialize computed properties and caches
+        self.cache = Cache(structure: structure)
+
+        try self.setWeights(neuralNet.allWeights())
+        self.cache.layerBiases = neuralNet.cache.layerBiases
+    }
 }
 
 

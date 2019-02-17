@@ -44,12 +44,12 @@ public extension NeuralNet {
         
         // Read all required values from JSON
         guard let layerNodeCounts = array[NeuralNet.layerNodeCountsKey] as? [Int],
-            let lr = array[NeuralNet.learningRateKey] as? Float,
-            let momentum = array[NeuralNet.momentumKey] as? Float,
+            let lr = array[NeuralNet.learningRateKey] as? Double,
+            let momentum = array[NeuralNet.momentumKey] as? Double,
             let batchSize = array[NeuralNet.batchSizeKey] as? Int,
             let hiddenActivationStr = array[NeuralNet.hiddenActivationKey] as? String,
             let outputActivationStr = array[NeuralNet.outputActivationKey] as? String,
-            let weights = array[NeuralNet.weightsKey] as? [[Float]]
+            let weights = array[NeuralNet.weightsKey] as? [[Double]]
             else {
                 throw Error.initialization("One or more required NeuralNet properties are missing.")
         }
@@ -87,10 +87,10 @@ public extension NeuralNet {
         // Recreate Structure object
         let structure = try Structure(nodes: layerNodeCounts,
                                       hiddenActivation: hiddenActivation, outputActivation: outputActivation,
-                                      batchSize: batchSize, learningRate: lr, momentum: momentum)
+                                      batchSize: batchSize, learningRate: Float(lr), momentum: Float(momentum))
         
         // Initialize neural network
-        try self.init(structure: structure, weights: weights)
+        try self.init(structure: structure, weights: weights.map { $0.map { Float($0) }})
     }
     
     
