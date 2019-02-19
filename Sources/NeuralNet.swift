@@ -495,6 +495,7 @@ public extension NeuralNet {
     ///                 or perform any other logic desired.
     /// - Returns: The total number of training epochs performed, and the final validation error.
     /// - Throws: An error if invalid data is provided. Checks are performed in advance to avoid problems during the training cycle.
+    @discardableResult
     public func train(_ data: Dataset, maxEpochs: Int,
                       errorThreshold: Float, errorFunction: ErrorFunction,
                       epochCallback: ((_ epoch: Int, _ error: Float) -> Bool)?) throws -> (epochs: Int, error: Float) {
