@@ -29,6 +29,7 @@ public extension NeuralNet {
     static let hiddenActivationKey = "hiddenActivation"
     static let outputActivationKey = "outputActivation"
     static let weightsKey = "weights"
+    static let biasesKey = "biases"
     
     
     /// Attempts to initialize a `NeuralNet` from a file stored at the given URL.
@@ -49,7 +50,8 @@ public extension NeuralNet {
             let batchSize = array[NeuralNet.batchSizeKey] as? Int,
             let hiddenActivationStr = array[NeuralNet.hiddenActivationKey] as? String,
             let outputActivationStr = array[NeuralNet.outputActivationKey] as? String,
-            let weights = array[NeuralNet.weightsKey] as? [[Double]]
+            let weights = array[NeuralNet.weightsKey] as? [[Double]],
+            let biases = array[NeuralNet.biasesKey] as? [[Double]]
             else {
                 throw Error.initialization("One or more required NeuralNet properties are missing.")
         }
@@ -90,7 +92,9 @@ public extension NeuralNet {
                                       batchSize: batchSize, learningRate: Float(lr), momentum: Float(momentum))
         
         // Initialize neural network
-        try self.init(structure: structure, weights: weights.map { $0.map { Float($0) }})
+        let floatWeights = weights.map { $0.map { Float($0) }}
+        let floatBiases = biases.map { $0.map { Float($0) }}
+        try self.init(structure: structure, weights: floatWeights, biases: floatBiases)
     }
     
     
@@ -104,7 +108,8 @@ public extension NeuralNet {
             NeuralNet.batchSizeKey : batchSize,
             NeuralNet.hiddenActivationKey : hiddenActivation.stringValue(),
             NeuralNet.outputActivationKey : outputActivation.stringValue(),
-            NeuralNet.weightsKey : allWeights()
+            NeuralNet.weightsKey : allWeights(),
+            NeuralNet.biasesKey : allBiases()
         ]
         
         // Serialize array into JSON data
