@@ -74,7 +74,7 @@ public final class NeuralNet {
     
     // MARK: Initialization
     
-    public init(structure: Structure, weights: [[Float]]? = nil) throws {
+    public init(structure: Structure, weights: [[Float]]? = nil, biases: [[Float]]? = nil) throws {
         // Initialize basic properties
         self.numLayers = structure.numLayers
         self.layerNodeCounts = structure.layerNodeCounts
@@ -94,8 +94,30 @@ public final class NeuralNet {
         } else {
             randomizeWeights()
         }
+
+        if let biases = biases {
+            try self.setBiases(biases)
+        }
     }
-    
+
+    /// Creates a new neural net by copying another neural net and modifying the batch size
+    /// This is useful if you use a large batch size to train the model but then want to infer with a smaller batch size (for instance 1)
+    public init(neuralNet: NeuralNet, structure: Structure, batchSize: Int) throws {
+        self.numLayers = neuralNet.numLayers
+        self.layerNodeCounts = neuralNet.layerNodeCounts
+        self.batchSize = batchSize
+        self.hiddenActivation = neuralNet.hiddenActivation
+        self.outputActivation = neuralNet.outputActivation
+        self.learningRate = neuralNet.learningRate
+        self.momentumFactor = neuralNet.momentumFactor
+        self.adjustedLearningRate = neuralNet.adjustedLearningRate
+
+        // Initialize computed properties and caches
+        self.cache = Cache(structure: structure)
+
+        try self.setWeights(neuralNet.allWeights())
+        self.cache.layerBiases = neuralNet.cache.layerBiases
+    }
 }
 
 
@@ -117,6 +139,22 @@ public extension NeuralNet {
     /// Returns an array of the network's current weights for each layer.
     public func allWeights() -> [[Float]] {
         return cache.layerWeights
+    }
+
+    /// Resets the network with the given biases (i.e. from a pre-trained network).
+    /// This change may safely be performed at any time.
+    ///
+    /// - Parameter weights: A 2D array of biases corresponding to each layer in the network.
+    public func setBiases(_ biases: [[Float]]) throws {
+        // TODO: ensure valid number of weights
+
+        // Reset all weights in the network
+        cache.layerBiases = biases
+    }
+
+    /// Returns an array of the network's current biases for each layer.
+    public func allBiases() -> [[Float]] {
+        return cache.layerBiases
     }
     
     /// Randomizes all of the network's weights.
@@ -474,12 +512,16 @@ public extension NeuralNet {
     ///                 The handler must return a `Bool` indicating whether training should continue.
     ///                 If `false` is returned, the training routine will exit immediately and return.
     ///                 The user may implement this block to monitor the training progress, tune network parameters,
-    ///                 or perform any other logic desired.
+    ///                 or perform any other logic desired. NOTE: The validation error and training error are both
+    ///                 returned here, but the training error is taken before back propagation so may be slightly
+    ///                 lower than the actual number. In practice, this doesn't matter and is a performance
+    ///                 improvement, so you can probably ignore this fact.
     /// - Returns: The total number of training epochs performed, and the final validation error.
     /// - Throws: An error if invalid data is provided. Checks are performed in advance to avoid problems during the training cycle.
+    @discardableResult
     public func train(_ data: Dataset, maxEpochs: Int,
                       errorThreshold: Float, errorFunction: ErrorFunction,
-                      epochCallback: ((_ epoch: Int, _ error: Float) -> Bool)?) throws -> (epochs: Int, error: Float) {
+                      epochCallback: ((_ epoch: Int, _ validationError: Float, _ trainingError: Float) -> Bool)?) throws -> (epochs: Int, error: Float) {
         // Ensure valid error threshold
         guard errorThreshold > 0 else {
             throw Error.train("Training error threshold must be greater than zero.")
@@ -499,14 +541,25 @@ public extension NeuralNet {
         
         // Reserve space for serializing all validation set outputs
         var validationOutputs = [Float](repeatElement(0, count: outputLength * batchSize * numBatches))
+
+        // Serialize all training labels into a single array
+        let trainLabels = data.trainLabels.reduce([], +)
+
+        // Also, calculate error on the training set to report that as well
+        var trainingOutputs = [Float](repeatElement(0, count: outputLength * batchSize * data.trainInputs.count))
         
         // Train until the desired error threshold is met or the max number of epochs has been executed
         var epochs = 1
         while true {
             // Complete one full training epoch
-            for (batchinputs, batchLabels) in zip(data.trainInputs, data.trainLabels) {
-                try infer(batchinputs)
+            for (batchIndex, (batchinputs, batchLabels)) in zip(data.trainInputs, data.trainLabels).enumerated() {
+                let outputs = try infer(batchinputs)
                 try backpropagate(batchLabels)
+
+                for i in 0..<batchOutputLength {
+                    let idx = batchIndex * batchOutputLength + i
+                    trainingOutputs[idx] = outputs[i]
+                }
             }
             
             // Perform inference on the full validation set
@@ -518,13 +571,16 @@ public extension NeuralNet {
                     validationOutputs[idx] = outputs[i]
                 }
             }
+
+            let trainingError = errorFunction.computeError(real: trainingOutputs, target: trainLabels,
+                                                           rows: batchSize * data.trainInputs.count, cols: outputLength)
             
             // Calculate error on the whole validation set
             let error = errorFunction.computeError(real: validationOutputs, target: validationLabels,
                                                    rows: batchSize * numBatches, cols: outputLength)
             
             // Notify callback of a newly-completed epoch; halt training if requested
-            if let toContinue = epochCallback?(epochs, error), toContinue == false {
+            if let toContinue = epochCallback?(epochs, error, trainingError), toContinue == false {
                 return (epochs, error)
             }
             
